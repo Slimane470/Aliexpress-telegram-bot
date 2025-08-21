@@ -112,6 +112,10 @@ To keep the bot running permanently, consider using tools like:
 5.  It will then fetch product details and generate the various affiliate links.
 6.  Finally, it will send a message back to the chat, usually with the product image as a photo and the details/links in the caption (formatted using HTML). If no image is found, it sends a text message. If link generation fails, it will indicate the failure.
 
+## API Reference
+
+For a complete reference of public modules, functions, and classes with examples, see `docs/API_REFERENCE.md`.
+
 ## Docker Deployment (Optional)
 
 If you have a `Dockerfile` set up for this project:
