@@ -82,13 +82,48 @@ OFFER_ORDER = ["coin", "super", "limited", "bigsave"]
 
 # --- Cache Implementation with Expiry ---
 class CacheWithExpiry:
+    """
+    Thread-safe asynchronous cache implementation with automatic expiry functionality.
+    
+    This cache stores key-value pairs with timestamps and automatically expires
+    items after a specified duration. All operations are async-safe using locks.
+    
+    Attributes:
+        cache (dict): Internal storage for cached items with timestamps
+        expiry_seconds (int): Time in seconds after which items expire
+        _lock (asyncio.Lock): Async lock for thread safety
+    
+    Example:
+        >>> cache = CacheWithExpiry(3600)  # 1 hour expiry
+        >>> await cache.set("user_123", {"name": "John"})
+        >>> user_data = await cache.get("user_123")
+        >>> expired_count = await cache.clear_expired()
+    """
+    
     def __init__(self, expiry_seconds):
+        """
+        Initialize cache with specified expiry time.
+        
+        Args:
+            expiry_seconds (int): Number of seconds after which cached items expire
+        """
         self.cache = {}
         self.expiry_seconds = expiry_seconds
         self._lock = asyncio.Lock()
 
     async def get(self, key):
-        """Get item from cache if it exists and is not expired (async safe)"""
+        """
+        Get item from cache if it exists and is not expired (async safe).
+        
+        Args:
+            key (str): The cache key to retrieve
+            
+        Returns:
+            Any | None: The cached value if found and not expired, otherwise None
+            
+        Note:
+            Automatically removes expired items when encountered.
+        """
         async with self._lock:
             if key in self.cache:
                 item, timestamp = self.cache[key]
@@ -102,13 +137,31 @@ class CacheWithExpiry:
             return None
 
     async def set(self, key, value):
-        """Add item to cache with current timestamp (async safe)"""
+        """
+        Add item to cache with current timestamp (async safe).
+        
+        Args:
+            key (str): The cache key
+            value (Any): The value to cache
+            
+        Note:
+            Overwrites existing values for the same key.
+        """
         async with self._lock:
             self.cache[key] = (value, time.time())
             logger.debug(f"Cached value for key: {key}")
 
     async def clear_expired(self):
-        """Remove all expired items from cache (async safe)"""
+        """
+        Remove all expired items from cache (async safe).
+        
+        Returns:
+            int: The number of expired items that were removed
+            
+        Note:
+            This method is called automatically by the periodic cleanup job
+            but can also be called manually for immediate cleanup.
+        """
         async with self._lock:
             current_time = time.time()
             expired_keys = [k for k, (_, t) in self.cache.items()
@@ -130,7 +183,33 @@ resolved_url_cache = CacheWithExpiry(CACHE_EXPIRY_SECONDS)
 # --- Helper Functions ---
 
 async def resolve_short_link(short_url: str, session: aiohttp.ClientSession) -> str | None:
-    """Follows redirects for a short URL to find the final destination URL."""
+    """
+    Resolves shortened URLs by following redirects to find the final destination URL.
+    
+    This function handles AliExpress shortened URLs (like s.click.aliexpress.com) and 
+    follows redirects to get the actual product page URL. It also performs domain 
+    normalization and country parameter adjustments.
+    
+    Args:
+        short_url (str): The shortened URL to resolve
+        session (aiohttp.ClientSession): HTTP session for making requests
+        
+    Returns:
+        str | None: The final resolved URL, or None if resolution failed
+        
+    Features:
+        - Automatic domain conversion from .aliexpress.us to .aliexpress.com
+        - Country parameter normalization using QUERY_COUNTRY
+        - Caching of resolved URLs to avoid repeated resolution
+        - Timeout handling (10 seconds)
+        - Comprehensive error handling
+        
+    Example:
+        >>> async with aiohttp.ClientSession() as session:
+        ...     final_url = await resolve_short_link("https://s.click.aliexpress.com/e/_abc123", session)
+        ...     if final_url:
+        ...         print(f"Resolved to: {final_url}")
+    """
     cached_final_url = await resolved_url_cache.get(short_url)
     if cached_final_url:
         logger.info(f"Cache hit for resolved short link: {short_url} -> {cached_final_url}")
@@ -189,8 +268,32 @@ async def resolve_short_link(short_url: str, session: aiohttp.ClientSession) -> 
 
 
 def extract_product_id(url):
-    """Extracts the product ID from an AliExpress URL.
-    Handles different domain formats including .us domain.
+    """
+    Extracts the AliExpress product ID from various URL formats.
+    
+    This function can handle multiple AliExpress URL formats including different
+    domains, subdomains, and URL structures. It performs domain normalization
+    and uses regex patterns to extract the numeric product ID.
+    
+    Args:
+        url (str): The AliExpress product URL to extract ID from
+        
+    Returns:
+        str | None: The extracted product ID as a string, or None if not found
+        
+    Supported URL Formats:
+        - https://www.aliexpress.com/item/1234567890.html
+        - https://vi.aliexpress.com/item/1234567890.html  
+        - https://www.aliexpress.us/item/1234567890.html
+        - URLs with additional query parameters
+        - Various subdomain formats
+        
+    Example:
+        >>> product_id = extract_product_id("https://www.aliexpress.com/item/1234567890.html")
+        >>> print(product_id)  # Output: "1234567890"
+        >>> 
+        >>> product_id = extract_product_id("https://vi.aliexpress.com/item/1234567890.html?param=value")
+        >>> print(product_id)  # Output: "1234567890"
     """
     # First, ensure we're working with a standardized URL format
     # Convert .us domain to .com domain if needed
@@ -301,7 +404,42 @@ async def periodic_cache_cleanup(context: ContextTypes.DEFAULT_TYPE):
 # --- API Call Functions (Adapted for Async Cache) ---
 
 async def fetch_product_details_v2(product_id):
-    """Fetches product details using aliexpress.affiliate.productdetail.get with async cache."""
+    """
+    Fetches product details from AliExpress API with caching support.
+    
+    This function retrieves comprehensive product information including title, price,
+    currency, and image URL using the official AliExpress affiliate API. It implements
+    intelligent caching to reduce API calls and improve performance.
+    
+    Args:
+        product_id (str): The AliExpress product ID to fetch details for
+        
+    Returns:
+        dict | None: Product details dictionary with keys:
+            - 'image_url' (str): Main product image URL
+            - 'price' (str): Product sale price  
+            - 'currency' (str): Price currency code
+            - 'title' (str): Product title
+            Returns None if the API call fails or product not found.
+            
+    Features:
+        - Automatic caching with configurable expiry (default: 24 hours)
+        - Thread pool execution for non-blocking API calls
+        - Comprehensive error handling and logging
+        - Support for multiple currencies and languages
+        - Detailed API response validation
+        
+    Example:
+        >>> details = await fetch_product_details_v2("1234567890")
+        >>> if details:
+        ...     print(f"Title: {details['title']}")
+        ...     print(f"Price: {details['price']} {details['currency']}")
+        ...     print(f"Image: {details['image_url']}")
+        
+    Note:
+        This function uses the AliExpress affiliate API which requires valid
+        credentials (ALIEXPRESS_APP_KEY and ALIEXPRESS_APP_SECRET).
+    """
     cached_data = await product_cache.get(product_id)
     if cached_data:
         logger.info(f"Cache hit for product ID: {product_id}")

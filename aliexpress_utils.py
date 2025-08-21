@@ -4,11 +4,46 @@ from bs4 import BeautifulSoup
 
 def get_aliexpress_product_info(product_url):
     """
-    Extract product name from AliExpress without Selenium
+    Extracts product name and image URL from an AliExpress product page using web scraping.
+    
+    This function serves as a fallback when the official AliExpress API is unavailable
+    or returns no data. It uses multiple extraction strategies with fallbacks to maximize
+    the success rate of getting product information.
+    
     Args:
-        product_url (str): AliExpress product page URL
+        product_url (str): The complete AliExpress product page URL
+        
     Returns:
-        str: product name
+        tuple[str | None, str | None]: A tuple containing (product_name, image_url)
+            - product_name: Cleaned product title or None if extraction failed
+            - image_url: Main product image URL or None if not found
+            
+    Features:
+        - Multiple fallback strategies for product name extraction
+        - Image URL extraction with OpenGraph fallback
+        - Automatic cleanup of product names (removes AliExpress suffixes)
+        - Custom headers and cookies for better success rate
+        - 15-second timeout for network requests
+        - Comprehensive error handling
+        
+    Extraction Strategies (in order of preference):
+        1. Specific H1 tag with CSS selector targeting product title area
+        2. OpenGraph title meta tag (og:title)
+        3. Keywords meta tag (first keyword as product name)
+        4. H1 tag with data-pl="product-title" attribute
+        5. H1 tag with product title CSS classes
+        6. Generic H1 tag (last resort)
+        
+    Example:
+        >>> name, image = get_aliexpress_product_info("https://www.aliexpress.com/item/123456789.html")
+        >>> if name:
+        ...     print(f"Product: {name}")
+        >>> if image:
+        ...     print(f"Image: {image}")
+        
+    Note:
+        This function makes HTTP requests to AliExpress and parses HTML content.
+        Success rates may vary depending on AliExpress page structure changes.
     """
     product_name = None  # Initialize product_name
     img_url = None       # Initialize img_url
@@ -88,11 +123,37 @@ def get_aliexpress_product_info(product_url):
 
 def get_product_details_by_id(product_id):
     """
-    Constructs URL from product ID and fetches product details.
+    Constructs a product URL from an AliExpress product ID and fetches product details.
+    
+    This is a convenience function that builds a standard AliExpress product URL
+    from just the product ID and then uses web scraping to extract product information.
+    It's particularly useful when you only have the numeric product ID.
+    
     Args:
-        product_id (str or int): The AliExpress product ID.
+        product_id (str | int): The AliExpress product ID (numeric)
+        
     Returns:
-        tuple: (product_name, img_url) or (None, None) if failed.
+        tuple[str | None, str | None]: A tuple containing (product_name, image_url)
+            - product_name: Cleaned product title or None if extraction failed
+            - image_url: Main product image URL or None if not found
+            
+    URL Format:
+        Uses the Vietnamese subdomain format: https://vi.aliexpress.com/item/{product_id}.html
+        
+    Example:
+        >>> name, image = get_product_details_by_id("1234567890")
+        >>> if name:
+        ...     print(f"Product: {name}")
+        >>> if image:
+        ...     print(f"Image: {image}")
+        >>>
+        >>> # Also works with integer input
+        >>> name, image = get_product_details_by_id(1234567890)
+        
+    Note:
+        This function internally calls get_aliexpress_product_info() with the
+        constructed URL, so it inherits all the same extraction strategies and
+        error handling capabilities.
     """
     product_url = f"https://vi.aliexpress.com/item/{product_id}.html"
     print(f"Constructed URL: {product_url}")
