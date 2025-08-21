@@ -25,6 +25,11 @@ A Python-based Telegram bot that automatically detects AliExpress product links 
 *   **Basic Logging:** Includes standard Python logging for monitoring bot activity and errors.
 *   **Static Links:** Includes easily accessible static links in the response footer for promotions (Choice Day, Best Deals) and social/community links (GitHub, Discord, Telegram).
 
+## Documentation
+
+- [Usage Guide](docs/USAGE_GUIDE.md)
+- [API Reference](docs/API_REFERENCE.md)
+
 ## Prerequisites
 
 *   Python 3.8+
