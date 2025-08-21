@@ -18,6 +18,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, JobQueue 
 from telegram.constants import ParseMode, ChatAction
 
+# --- Deals Provider and Subscribers Store ---
+from deals_provider import fetch_top_deals
+from subscribers_store import add_subscriber, remove_subscriber, list_subscribers
+
 
 # --- Environment Variable Loading ---
 load_dotenv()
@@ -29,6 +33,7 @@ TARGET_CURRENCY = os.getenv('TARGET_CURRENCY', 'USD')
 TARGET_LANGUAGE = os.getenv('TARGET_LANGUAGE', 'en')
 QUERY_COUNTRY = os.getenv('QUERY_COUNTRY', 'US')
 ALIEXPRESS_TRACKING_ID = os.getenv('ALIEXPRESS_TRACKING_ID', 'default')
+DEALS_PUSH_INTERVAL_MINUTES = int(os.getenv('DEALS_PUSH_INTERVAL_MINUTES', '360'))
 
 # --- Basic Logging Setup ---
 logging.basicConfig(
@@ -543,6 +548,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "🚀 Send any AliExpress product link now to try the bot! 🎁"
     )
 
+async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    added = add_subscriber(chat_id)
+    if added:
+        await context.bot.send_message(chat_id=chat_id, text="✅ Subscribed to deals updates.")
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="You are already subscribed.")
+
+
+async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    removed = remove_subscriber(chat_id)
+    if removed:
+        await context.bot.send_message(chat_id=chat_id, text="🚫 Unsubscribed from deals updates.")
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="You were not subscribed.")
+
+
+async def deals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    deals = fetch_top_deals(limit=5)
+    if not deals:
+        await context.bot.send_message(chat_id=chat_id, text="No deals available right now.")
+        return
+    lines = [f"{d.title} — ${d.price:.2f}\n{d.url}" for d in deals]
+    await context.bot.send_message(chat_id=chat_id, text="\n\n".join(lines))
+
+
+async def push_deals_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    subscribers = list_subscribers()
+    if not subscribers:
+        return
+    deals = fetch_top_deals(limit=5)
+    if not deals:
+        return
+    text = "\n\n".join([f"{d.title} — ${d.price:.2f}\n{d.url}" for d in deals])
+    for chat_id in subscribers:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=text)
+        except Exception as e:
+            logger.warning(f"Failed to send deals to {chat_id}: {e}")
+
+
 # --- Telegram Message Processing ---
 
 async def process_product_telegram(product_id: str, base_url: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -841,6 +889,9 @@ def main() -> None:
     # --- Add Handlers ---
     # Command handlers
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("subscribe", subscribe))
+    application.add_handler(CommandHandler("unsubscribe", unsubscribe))
+    application.add_handler(CommandHandler("deals", deals_command))
 
     # Message handler for text messages that are not commands
     # Using TEXT filter and checking for standard or known short link domains
@@ -872,6 +923,8 @@ def main() -> None:
     # Run cache cleanup once shortly after start, then every day
     job_queue.run_once(periodic_cache_cleanup, 60)
     job_queue.run_repeating(periodic_cache_cleanup, interval=timedelta(days=1), first=timedelta(days=1))
+    # Deals push job
+    job_queue.run_repeating(push_deals_job, interval=timedelta(minutes=DEALS_PUSH_INTERVAL_MINUTES), first=timedelta(minutes=1))
 
     # --- Start the Bot ---
     logger.info("Starting Telegram bot polling...")
