@@ -1,0 +1,42 @@
+[
+  {
+    "id": "alx-1001",
+    "title": "Wireless Bluetooth Earbuds",
+    "price": 19.99,
+    "currency": "USD",
+    "url": "https://www.aliexpress.com/item/1005000000001.html",
+    "image_url": "https://example.com/images/earbuds.jpg",
+    "category": "electronics",
+    "discount_text": "50% off"
+  },
+  {
+    "id": "alx-1002",
+    "title": "USB-C Fast Charging Cable (2m)",
+    "price": 3.49,
+    "currency": "USD",
+    "url": "https://www.aliexpress.com/item/1005000000002.html",
+    "image_url": "https://example.com/images/cable.jpg",
+    "category": "electronics",
+    "discount_text": "Flash deal"
+  },
+  {
+    "id": "alx-2001",
+    "title": "Minimalist Leather Wallet",
+    "price": 7.99,
+    "currency": "USD",
+    "url": "https://www.aliexpress.com/item/1005000000003.html",
+    "image_url": "https://example.com/images/wallet.jpg",
+    "category": "fashion",
+    "discount_text": "Summer sale"
+  },
+  {
+    "id": "alx-3001",
+    "title": "LED Desk Lamp with Touch Control",
+    "price": 12.50,
+    "currency": "USD",
+    "url": "https://www.aliexpress.com/item/1005000000004.html",
+    "image_url": "https://example.com/images/lamp.jpg",
+    "category": "home",
+    "discount_text": "40% off"
+  }
+]

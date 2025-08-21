@@ -1,4 +1,4 @@
-FROM python:3.11.2-slim
+FROM python:3.11-slim
 
 
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
@@ -9,14 +9,12 @@ RUN chown -R appuser:appgroup /app
 
 WORKDIR /app
 
-COPY --chown=appuser:appgroup requirements.txt .
-
-# Install dependencies
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --chown=appuser:appgroup . .
+COPY src ./src
+COPY data ./data
+COPY .env ./.env
 
-USER appuser
-
-
-CMD ["sh", "-c", "python keep_alive.py & python app.py"]
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "-m", "src.bot"]
